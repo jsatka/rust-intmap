@@ -29,7 +29,7 @@ mod tests {
     fn intmap_get_insert_impl() {
         let count = 20_000;
         let data = get_random_range(count as usize);
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         println!("");
         println!("Starting test");
@@ -42,14 +42,14 @@ mod tests {
         assert!(map.assert_count());
 
         for s in data.iter() {
-            assert_eq!(*map.get(*s).unwrap(), *s, "intmap get failed! key: {:?}", s);
+            assert_eq!(*map.get(s).unwrap(), *s, "intmap get failed! key: {:?}", s);
         }
 
         assert_eq!(map.len(), count);
 
         for s in data.iter() {
             assert!(
-                map.contains_key(*s),
+                map.contains_key(s),
                 "intmap contains_key failed! key: {:?}",
                 s
             );
@@ -58,7 +58,7 @@ mod tests {
         assert_eq!(map.len(), count);
 
         for s in data.iter() {
-            let val = map.remove(*s).unwrap();
+            let val = map.remove(s).unwrap();
             assert_eq!(val, *s, "intmap remove failed! key: {:?}", s);
         }
 
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn reserve() {
-        let mut map: IntMap<bool> = IntMap::new();
+        let mut map: IntMap<u64, bool> = IntMap::new();
         map.reserve(9001);
     }
 
@@ -84,22 +84,22 @@ mod tests {
 
     #[test]
     fn get_value_map() {
-        let mut map = IntMap::new();
+        let mut map = IntMap::<i32, i32>::new();
 
         for i in 0..20_000 {
             assert_eq!(map.insert(i, i + 1), true);
         }
 
         for i in 0..20_000 {
-            assert_eq!(map.contains_key(i), true);
-            assert_eq!(*map.get(i).unwrap(), i + 1);
-            assert_eq!(*map.get_mut(i).unwrap(), i + 1);
-            assert_eq!(map.remove(i).unwrap(), i + 1);
+            assert_eq!(map.contains_key(&i), true);
+            assert_eq!(*map.get(&i).unwrap(), i + 1);
+            assert_eq!(*map.get_mut(&i).unwrap(), i + 1);
+            assert_eq!(map.remove(&i).unwrap(), i + 1);
         }
 
         for i in 0..20_000 {
-            assert_eq!(map.contains_key(i), false);
-            assert_eq!(map.remove(i), None);
+            assert_eq!(map.contains_key(&i), false);
+            assert_eq!(map.remove(&i), None);
         }
 
         assert!(map.is_empty());
@@ -107,21 +107,21 @@ mod tests {
 
     #[test]
     fn get_value_not_in_map() {
-        let mut map = IntMap::new();
+        let mut map = IntMap::<i32, String>::new();
 
         for i in 0..20_000 {
             assert_eq!(map.insert(i, format!("item: {:?}", i)), true);
         }
 
         for i in 20_000..40_000 {
-            assert_eq!(map.get(i), None);
-            assert_eq!(map.get_mut(i), None);
+            assert_eq!(map.get(&i), None);
+            assert_eq!(map.get_mut(&i), None);
         }
     }
 
     #[test]
     fn add_string() {
-        let mut map = IntMap::new();
+        let mut map = IntMap::<i32, String>::new();
 
         for i in 0..20_000 {
             map.insert(i, format!("item: {:?}", i));
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn retain() {
-        let mut map = IntMap::new();
+        let mut map = IntMap::<i32, String>::new();
 
         for i in 0..20_000 {
             map.insert(i, format!("item: {:?}", i));
@@ -139,15 +139,15 @@ mod tests {
         map.retain(|k, _v| k > 10_000);
 
         for i in 10_001..20_000 {
-            assert_eq!(map.contains_key(i), true);
+            assert_eq!(map.contains_key(&i), true);
         }
     }
 
     #[test]
     fn single_add_get() {
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
         map.insert(21, 42);
-        let val = map.get(21);
+        let val = map.get(&21);
         assert!(val.is_some());
         assert_eq!(*val.unwrap(), 42);
     }
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn map_iter() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -170,7 +170,7 @@ mod tests {
     fn map_iter_keys() {
         let count = 20_000;
         let data: Vec<_> = (0..count).collect();
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -185,7 +185,7 @@ mod tests {
     fn map_iter_values() {
         let count = 20_000;
         let data: Vec<_> = (0..count).collect();
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn map_iter_values_mut() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -210,14 +210,14 @@ mod tests {
         }
 
         for n in 0..count {
-            assert_eq!(n + 1, *map.get(n).expect("Failed to get number!"));
+            assert_eq!(n + 1, *map.get(&n).expect("Failed to get number!"));
         }
     }
 
     #[test]
     fn map_mut_iter() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -228,13 +228,13 @@ mod tests {
         }
 
         for n in 0..count {
-            assert_eq!(n + 1, *map.get(n).expect("Failed to get number!"));
+            assert_eq!(n + 1, *map.get(&n).expect("Failed to get number!"));
         }
     }
 
     #[test]
     fn map_iter_empty() {
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
         map.clear();
 
         for kv in map.iter() {
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn map_mut_iter_empty() {
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
         map.clear();
 
         for _ in map.iter_mut() {
@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn map_into_iter() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn map_drain() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn map_into_iter_empty() {
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
         map.clear();
 
         for kv in map.into_iter() {
@@ -294,8 +294,8 @@ mod tests {
     #[test]
     fn extend_two_maps() {
         let count = 20_000;
-        let mut map_1: IntMap<u64> = IntMap::new();
-        let mut map_2: IntMap<u64> = IntMap::new();
+        let mut map_1: IntMap<u64, u64> = IntMap::new();
+        let mut map_2: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map_1.insert(i, i);
@@ -318,10 +318,10 @@ mod tests {
     fn from_iter_collect() {
         let count = 20_000;
 
-        let map = (0..count).map(|i| (i, i * i)).collect::<IntMap<_>>();
+        let map = (0..count).map(|i| (i, i * i)).collect::<IntMap<u32, _>>();
 
         for k in 0..count {
-            assert!(map.contains_key(k));
+            assert!(map.contains_key(&k));
         }
 
         for (&k, &v) in map.iter() {
@@ -333,17 +333,17 @@ mod tests {
     fn map_equality() {
         let count = 5_000;
 
-        let map_1 = (0..count).map(|i| (i, i * i)).collect::<IntMap<_>>();
+        let map_1 = (0..count).map(|i| (i, i * i)).collect::<IntMap<_, _>>();
 
-        let map_2 = (0..count).rev().map(|i| (i, i * i)).collect::<IntMap<_>>();
+        let map_2 = (0..count).rev().map(|i| (i, i * i)).collect::<IntMap<_, _>>();
 
         assert_eq!(map_1, map_2);
     }
 
     #[test]
     fn map_inequality() {
-        let map_1 = (0..10).map(|i| (i, i * i)).collect::<IntMap<_>>();
-        let map_2 = (0..5).rev().map(|i| (i, i * i)).collect::<IntMap<_>>();
+        let map_1 = (0..10).map(|i| (i, i * i)).collect::<IntMap<_, _>>();
+        let map_2 = (0..5).rev().map(|i| (i, i * i)).collect::<IntMap<_, _>>();
 
         assert_ne!(map_1, map_2);
         assert_ne!(map_2, map_1);
@@ -353,7 +353,7 @@ mod tests {
     fn entry_api() {
         let count = 20_000;
         let data: Vec<u64> = (0..count).collect();
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         // Insert values 0..19999
         for i in 0..count {
@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn test_debug_features() {
         let count = 20_000;
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         for i in 0..count {
             map.insert(i, i);
@@ -415,7 +415,7 @@ mod tests {
         assert!(map.load_rate() > 0.70);
         assert!(map.collisions().is_empty());
 
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
         for i in 0..3 {
             map.insert(i, i + 1);
         }
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn load_factor() {
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         map.set_load_factor(0.1);
         assert_eq!(map.get_load_factor(), 0.1);
@@ -438,7 +438,7 @@ mod tests {
         assert!(map.load_rate() <= 10.);
         assert!(map.collisions().is_empty());
 
-        let mut map: IntMap<u64> = IntMap::new();
+        let mut map: IntMap<u64, u64> = IntMap::new();
 
         map.set_load_factor(2.);
         assert_eq!(map.get_load_factor(), 2.);

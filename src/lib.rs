@@ -2,23 +2,28 @@
 mod serde;
 
 mod entry;
+mod key;
 mod iter;
 
 use core::iter::{IntoIterator, Iterator};
+use std::marker::PhantomData;
+use std::fmt::Debug;
 use iter::*;
 
 pub use entry::*;
+pub use key::IntMapKey;
 
 #[derive(Clone)]
-pub struct IntMap<V> {
-    cache: Vec<Vec<(u64, V)>>,
+pub struct IntMap<K: Copy + Debug + PartialEq + IntMapKey, V> {
+    cache: Vec<Vec<(K, V)>>,
     size: u32,
     mod_mask: u64,
     count: usize,
     load_factor: usize,
+    _key_type: PhantomData<K>,
 }
 
-impl<V> IntMap<V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> IntMap<K, V> {
     /// Creates a new IntMap.
     ///
     /// # Examples
@@ -26,7 +31,7 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// assert_eq!(map, IntMap::default());
     /// ```
     pub fn new() -> Self {
@@ -41,7 +46,7 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::with_capacity(20);
+    /// let mut map: IntMap<u64, u64> = IntMap::with_capacity(20);
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         let mut map = IntMap {
@@ -50,6 +55,7 @@ impl<V> IntMap<V> {
             count: 0,
             mod_mask: 0,
             load_factor: 909, // 90.9%
+            _key_type: PhantomData::<K>,
         };
 
         map.increase_cache();
@@ -70,7 +76,7 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::with_capacity(20);
+    /// let mut map: IntMap<u64, u64> = IntMap::with_capacity(20);
     /// map.set_load_factor(0.909); // Sets load factor to 90.9%
     /// ```
     pub fn set_load_factor(&mut self, load_factor: f32) {
@@ -103,12 +109,12 @@ impl<V> IntMap<V> {
     /// let mut map = IntMap::new();
     /// assert!(map.insert(21, "Eat my shorts"));
     /// assert!(!map.insert(21, "Ay, caramba"));
-    /// assert_eq!(map.get(21), Some(&"Eat my shorts"));
+    /// assert_eq!(map.get(&21), Some(&"Eat my shorts"));
     /// ```
-    pub fn insert(&mut self, key: u64, value: V) -> bool {
-        let ix = self.calc_index(key);
+    pub fn insert(&mut self, key: K, value: V) -> bool {
+        let idx = self.calc_index(&key);
 
-        let vals = &mut self.cache[ix];
+        let vals = &mut self.cache[idx];
         if vals.iter().any(|kv| kv.0 == key) {
             return false;
         }
@@ -130,19 +136,18 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
-    /// let val = map.get(21);
+    /// let val = map.get(&21);
     /// assert!(val.is_some());
-    /// assert_eq!(*val.unwrap(), 42);
-    /// assert!(map.contains_key(21));
+    /// assert_eq!(val.unwrap(), &42u64);
+    /// assert!(map.contains_key(&21));
     /// ```
-    pub fn get(&self, key: u64) -> Option<&V> {
-        let ix = self.calc_index(key);
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let idx = self.calc_index(key);
+        let vals = &self.cache[idx];
 
-        let vals = &self.cache[ix];
-
-        vals.iter().find_map(|kv| (kv.0 == key).then(|| &kv.1))
+        vals.iter().find_map(|kv| (kv.0 == *key).then(|| &kv.1))
     }
 
     /// Get mutable value from the IntMap.
@@ -152,26 +157,25 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
     ///
-    /// assert_eq!(*map.get(21).unwrap(), 42);
-    /// assert!(map.contains_key(21));
+    /// assert_eq!(map.get(&21).unwrap(), &42u64);
+    /// assert!(map.contains_key(&21));
     ///
     /// {
-    ///     let mut val = map.get_mut(21).unwrap();
-    ///     *val+=1;
+    ///     let mut val = map.get_mut(&21).unwrap();
+    ///     *val += 1;
     /// }
-    ///     assert_eq!(*map.get(21).unwrap(), 43);
+    ///     assert_eq!(map.get(&21).unwrap(), &43u64);
     /// ```
-    pub fn get_mut(&mut self, key: u64) -> Option<&mut V> {
-        let ix = self.calc_index(key);
-
-        let vals = &mut self.cache[ix];
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        let idx = self.calc_index(key);
+        let vals = &mut self.cache[idx];
 
         return vals
             .iter_mut()
-            .find_map(|kv| (kv.0 == key).then(move || &mut kv.1));
+            .find_map(|kv| (kv.0 == *key).then(move || &mut kv.1));
     }
 
     /// Remove value from the IntMap.
@@ -181,22 +185,20 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
-    /// let val = map.remove(21);
+    /// let val = map.remove(&21);
     /// assert!(val.is_some());
     /// assert_eq!(val.unwrap(), 42);
-    /// assert!(!map.contains_key(21));
+    /// assert!(!map.contains_key(&21));
     /// ```
-    pub fn remove(&mut self, key: u64) -> Option<V> {
-        let ix = self.calc_index(key);
-
-        let ref mut vals = self.cache[ix];
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        let idx = self.calc_index(&key);
+        let ref mut vals = self.cache[idx];
 
         for i in 0..vals.len() {
             let peek = vals[i].0;
-
-            if peek == key {
+            if peek == *key {
                 self.count -= 1;
                 let kv = vals.swap_remove(i);
                 return Some(kv.1);
@@ -213,12 +215,12 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
-    /// assert!(map.contains_key(21));
+    /// assert!(map.contains_key(&21));
     /// ```
-    pub fn contains_key(&self, key: u64) -> bool {
-        self.get(key).is_some()
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.get(&key).is_some()
     }
 
     /// Removes all elements from map.
@@ -228,7 +230,7 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
     /// map.clear();
     /// assert_eq!(map.len(), 0);
@@ -250,7 +252,7 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(1, 11);
     /// map.insert(2, 12);
     /// map.insert(4, 13);
@@ -259,12 +261,12 @@ impl<V> IntMap<V> {
     /// map.retain(|k, v| *v % 2 == 1);
     ///
     /// assert_eq!(map.len(), 2);
-    /// assert!(map.contains_key(1));
-    /// assert!(map.contains_key(4));
+    /// assert!(map.contains_key(&1));
+    /// assert!(map.contains_key(&4));
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(u64, &V) -> bool,
+        F: FnMut(K, &V) -> bool,
     {
         let mut removed = 0;
         for vals in &mut self.cache {
@@ -287,10 +289,10 @@ impl<V> IntMap<V> {
     /// ```
     /// use intmap::IntMap;
     ///
-    /// let mut map: IntMap<u64> = IntMap::new();
+    /// let mut map: IntMap<u64, u64> = IntMap::new();
     /// map.insert(21, 42);
     /// assert!(!map.is_empty());
-    /// map.remove(21);
+    /// map.remove(&21);
     /// assert!(map.is_empty());
     /// ```
     pub fn is_empty(&mut self) -> bool {
@@ -299,29 +301,29 @@ impl<V> IntMap<V> {
 
     //**** Iterators *****
 
-    pub fn iter(&self) -> Iter<u64, V> {
+    pub fn iter(&self) -> Iter<K, V> {
         Iter::new(&self.cache)
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<u64, V> {
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut::new(&mut self.cache)
     }
 
-    pub fn keys(&self) -> Keys<u64, V> {
+    pub fn keys(&self) -> Keys<K, V> {
         Keys { inner: self.iter() }
     }
 
-    pub fn values(&self) -> Values<u64, V> {
+    pub fn values(&self) -> Values<K, V> {
         Values { inner: self.iter() }
     }
 
-    pub fn values_mut(&mut self) -> ValuesMut<u64, V> {
+    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
         ValuesMut {
             inner: self.iter_mut(),
         }
     }
 
-    pub fn drain(&mut self) -> Drain<u64, V> {
+    pub fn drain(&mut self) -> Drain<K, V> {
         Drain::new(&mut self.cache, &mut self.count)
     }
 
@@ -335,8 +337,8 @@ impl<V> IntMap<V> {
     }
 
     #[inline]
-    pub(crate) fn calc_index(&self, key: u64) -> usize {
-        let hash = Self::hash_u64(key);
+    pub(crate) fn calc_index(&self, key: &K) -> usize {
+        let hash = Self::hash_u64(key.intmap_key());
         // Faster modulus
         (hash & self.mod_mask) as usize
     }
@@ -351,14 +353,14 @@ impl<V> IntMap<V> {
         let new_lim = self.lim();
         self.mod_mask = (new_lim as u64) - 1;
 
-        let mut vec: Vec<Vec<(u64, V)>> = (0..new_lim).map(|_| Vec::new()).collect();
+        let mut vec: Vec<Vec<(K, V)>> = (0..new_lim).map(|_| Vec::new()).collect();
         std::mem::swap(&mut self.cache, &mut vec);
 
-        for k in vec.into_iter().flatten() {
-            let ix = self.calc_index(k.0);
+        for kv in vec.into_iter().flatten() {
+            let idx = self.calc_index(&kv.0);
 
-            let ref mut vals = self.cache[ix];
-            vals.push(k);
+            let ref mut vals = self.cache[idx];
+            vals.push(kv);
         }
 
         debug_assert!(
@@ -404,16 +406,16 @@ impl<V> IntMap<V> {
         self.count == count
     }
 
-    pub fn collisions(&self) -> IntMap<u64> {
+    pub fn collisions(&self) -> IntMap<u64, u64> {
         let mut map = IntMap::new();
 
         for s in self.cache.iter() {
             let key = s.len() as u64;
             if key > 1 {
-                if !map.contains_key(key) {
+                if !map.contains_key(&key) {
                     map.insert(key, 1);
                 } else {
-                    let counter = map.get_mut(key).unwrap();
+                    let counter = map.get_mut(&key).unwrap();
                     *counter += 1;
                 }
             }
@@ -441,19 +443,19 @@ impl<V> IntMap<V> {
     ///     *counter += 1;
     /// }
     ///
-    /// assert_eq!(counters.get(10), Some(&2));
-    /// assert_eq!(counters.get(20), None);
-    /// assert_eq!(counters.get(30), Some(&1));
-    /// assert_eq!(counters.get(40), Some(&1));
-    /// assert_eq!(counters.get(50), Some(&3));
-    /// assert_eq!(counters.get(60), Some(&1));
+    /// assert_eq!(counters.get(&10), Some(&2));
+    /// assert_eq!(counters.get(&20), None);
+    /// assert_eq!(counters.get(&30), Some(&1));
+    /// assert_eq!(counters.get(&40), Some(&1));
+    /// assert_eq!(counters.get(&50), Some(&3));
+    /// assert_eq!(counters.get(&60), Some(&1));
     /// ```
-    pub fn entry(&mut self, key: u64) -> Entry<V> {
+    pub fn entry(&mut self, key: K) -> Entry<K, V> {
         Entry::new(key, self)
     }
 }
 
-impl<V> Default for IntMap<V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> Default for IntMap<K, V> {
     fn default() -> Self {
         Self::new()
     }
@@ -461,20 +463,20 @@ impl<V> Default for IntMap<V> {
 
 // ***************** Equality *********************
 
-impl<V> PartialEq for IntMap<V>
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> PartialEq for IntMap<K, V>
 where
     V: PartialEq,
 {
-    fn eq(&self, other: &IntMap<V>) -> bool {
-        self.iter().all(|(k, a)| other.get(*k) == Some(a))
-            && other.iter().all(|(k, a)| self.get(*k) == Some(a))
+    fn eq(&self, other: &IntMap<K, V>) -> bool {
+        self.iter().all(|(k, a)| other.get(k) == Some(a))
+            && other.iter().all(|(k, a)| self.get(k) == Some(a))
     }
 }
-impl<V> Eq for IntMap<V> where V: Eq {}
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> Eq for IntMap<K, V> where V: Eq {}
 
 // ***************** Debug *********************
 
-impl<V> std::fmt::Debug for IntMap<V>
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> std::fmt::Debug for IntMap<K, V>
 where
     V: std::fmt::Debug,
 {

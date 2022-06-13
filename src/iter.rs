@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::iter::FlatMap as IterFlatMap;
 use std::iter::Flatten as IterFlatten;
 use std::slice::Iter as SliceIter;
@@ -6,6 +7,7 @@ use std::vec::Drain as VecDrain;
 use std::vec::IntoIter as VecIntoIter;
 
 use crate::IntMap;
+use crate::IntMapKey;
 
 // ***************** Iter *********************
 
@@ -113,9 +115,9 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
 
 // ***************** Into Iter *********************
 
-impl<V> IntoIterator for IntMap<V> {
-    type Item = (u64, V);
-    type IntoIter = IntoIter<u64, V>;
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> IntoIterator for IntMap<K, V> {
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter::new(self.cache)
@@ -126,7 +128,7 @@ pub struct IntoIter<K, V> {
     inner: IterFlatten<VecIntoIter<Vec<(K, V)>>>,
 }
 
-impl<K, V> IntoIter<K, V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> IntoIter<K, V> {
     pub(crate) fn new(vec: Vec<Vec<(K, V)>>) -> Self {
         IntoIter {
             inner: vec.into_iter().flatten(),
@@ -134,7 +136,7 @@ impl<K, V> IntoIter<K, V> {
     }
 }
 
-impl<K, V> Iterator for IntoIter<K, V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> Iterator for IntoIter<K, V> {
     type Item = (K, V);
 
     #[inline]
@@ -145,7 +147,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
 
 // ***************** Drain Iter *********************
 
-pub struct Drain<'a, K: 'a, V: 'a> {
+pub struct Drain<'a, K: 'a + Copy + Debug + PartialEq + IntMapKey, V: 'a> {
     count: &'a mut usize,
     inner: IterFlatMap<
         SliceIterMut<'a, Vec<(K, V)>>,
@@ -154,7 +156,7 @@ pub struct Drain<'a, K: 'a, V: 'a> {
     >,
 }
 
-impl<'a, K, V> Drain<'a, K, V> {
+impl<'a, K: Copy + Debug + PartialEq + IntMapKey, V> Drain<'a, K, V> {
     pub(crate) fn new(vec: &'a mut Vec<Vec<(K, V)>>, count: &'a mut usize) -> Drain<'a, K, V> {
         Drain {
             count,
@@ -163,7 +165,7 @@ impl<'a, K, V> Drain<'a, K, V> {
     }
 }
 
-impl<'a, K, V> Iterator for Drain<'a, K, V> {
+impl<'a, K: Copy + Debug + PartialEq + IntMapKey, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     #[inline]
@@ -178,9 +180,9 @@ impl<'a, K, V> Iterator for Drain<'a, K, V> {
 
 // ***************** Extend *********************
 
-impl<V> Extend<(u64, V)> for IntMap<V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> Extend<(K, V)> for IntMap<K, V> {
     #[inline]
-    fn extend<T: IntoIterator<Item = (u64, V)>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         for elem in iter {
             self.insert(elem.0, elem.1);
         }
@@ -189,9 +191,9 @@ impl<V> Extend<(u64, V)> for IntMap<V> {
 
 // ***************** FromIterator *********************
 
-impl<V> std::iter::FromIterator<(u64, V)> for IntMap<V> {
+impl<K: Copy + Debug + PartialEq + IntMapKey, V> std::iter::FromIterator<(K, V)> for IntMap<K, V> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (u64, V)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         let iterator = iter.into_iter();
         let (lower_bound, _) = iterator.size_hint();
 
